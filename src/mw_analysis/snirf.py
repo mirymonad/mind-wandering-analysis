@@ -4,6 +4,7 @@ import numpy as np
 from pandas import DataFrame
 from snirf import Nirs, Snirf
 
+from datetime import datetime
 from dataclasses import dataclass
 
 
@@ -20,10 +21,18 @@ def to_snirf(dataset: NirscordDataset, filepath: str):
     snirf.nirs.appendGroup()
     nirs = snirf.nirs[0]
 
+    snirf.formatVersion = "1.0"
+
     # Set the subject ID on the snirf HEHE
     nirs.metaDataTags.TimeUnit = "s"
     nirs.metaDataTags.LengthUnit = "m"
+    nirs.metaDataTags.FrequencyUnit = "Hz"
     nirs.metaDataTags.SubjectID = dataset.subject_id
+
+    now = datetime.now()
+
+    nirs.metaDataTags.MeasurementDate = now.strftime("%Y-%m-%d")
+    nirs.metaDataTags.MeasurementTime = now.strftime("%H:%M:%S")
 
     # Create the different sections of the SNIRF file
     _create_probe(dataset.stream_df, nirs)
@@ -73,7 +82,8 @@ def _create_probe(stream_df: DataFrame, nirs: Nirs):
         dtype=float,
     )
 
-    probe.wavelengths = np.array([], dtype=float)
+    # Dummy wavelength as this is for HbO / Hb concentrations
+    probe.wavelengths = np.array([0.0], dtype=float)
 
 
 def _create_data_block(stream_df: DataFrame, nirs: Nirs):
@@ -103,22 +113,26 @@ def _create_measurement(stream_df: DataFrame, nirs: Nirs):
 
     for index, name in enumerate(stream_df.filter(like="hb").columns):
         data_block.measurementList.appendGroup()
-        measurement = data_block.measurementList[0]
+        measurement = data_block.measurementList[-1]
 
         sd_name, signal = name.rsplit(" ", 1)
         source, detector = sd_name.split("_")
 
-        # SNIRF indices are 1-based.
+        # Set the extracted source and detector numbers
         measurement.sourceIndex = int(source[1:])
         measurement.detectorIndex = int(detector[1:])
 
-        # 99999 = processed data
+        # Data type 99999 indicates the data is processed
         measurement.dataType = 99999
-        measurement.dataTypeLabel = signal
         measurement.dataTypeIndex = 1
+        measurement.dataTypeLabel = signal
 
-        # Change this if your dataframe uses a different unit.
+        # The default data unit set on all the measurements
         measurement.dataUnit = "M"
+
+        # Points to the dummy wavelength to pass validation
+        measurement.wavelengthIndex = 1
+
 
 def _create_events(events_df: DataFrame, nirs: Nirs):
     events_df["value"] = events_df["value"].map({
