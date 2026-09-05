@@ -186,38 +186,6 @@ def short_channel_regressor(long_channels, short_channel):
     return long_channels - (X @ beta)
 
 
-def detect_motion_spikes(df, cols, fs=32.25, period=20, threshold=2):
-    df = df.copy()
-
-    window = int(fs * period)
-
-    baseline = df[cols].rolling(
-        window=window,
-        center=True,
-        min_periods=window // 2
-    ).median()
-
-    mad = (df[cols] - baseline).abs().rolling(
-        window=window,
-        center=True,
-        min_periods=window // 2
-    ).median()
-
-    robust_sd = 1.4826 * mad
-
-    z = (df[cols] - baseline) / robust_sd.replace(0, np.nan)
-
-    spikes = z.abs() > threshold
-
-    # Replace only detected spikes
-    df[cols] = df[cols].mask(spikes)
-
-    # Interpolate them
-    df[cols] = df[cols].interpolate()
-
-    return df
-
-
 def collect_epochs(datasets, segment: range):
     collected_error_epochs = []
     collected_no_error_epochs = []
